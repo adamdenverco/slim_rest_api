@@ -27,16 +27,21 @@ use Slim\Http\Response;
 
 $app->get('/', function (Request $request, Response $response, array $args) {
     // $app->response->setStatus(200);
-    $response->getBody()->write(' Welcome to Slim based API ');
-    return $response;
+
+    // $response->getBody()->write('This is a SLIM REST API. ');
+    
+    return $this->renderer->render($response, 'index.phtml', $args);
+
+    // return $response;
 });
 
+// POST LOGIN: login and get token
 $app->post('/login', function (Request $request, Response $response, array $args) {
 
     // set default output
     $output = [
         'status' => '',
-        'message' => '', 
+        'message' => '',
         'data' =>  []
     ];
 
@@ -53,8 +58,12 @@ $app->post('/login', function (Request $request, Response $response, array $args
 
     } else {
 
+        // echo "<pre>";
+        // print_r($post_data);
+        // echo "</pre>";
+
         $user = R::getRow(
-            "select id, username, token, token_expire, firstname, lastname, email, created, updated 
+            "select id, username, firstname, lastname, email, created, updated 
             from users where (username = :username) AND (status = 1) AND (password = :password) ", 
             array(':username' => trim($post_data['username']), ':password' => md5(trim($post_data['password'])) ) 
         );
@@ -67,9 +76,12 @@ $app->post('/login', function (Request $request, Response $response, array $args
         // else we found a valid user
         } else {
 
+            // generate token
+            $GLOBALS['token'] = bin2hex(openssl_random_pseudo_bytes(8));
+
             // load user bean, generate token, set expiration and update user
             $update_user = R::load('users', $user['id']);
-            $update_user->token = bin2hex(openssl_random_pseudo_bytes(8));
+            $update_user->token = $GLOBALS['token'];
             $update_user->token_expire = date('Y-m-d H:i:s', strtotime('+1 hour'));
             R::store($update_user);
 
@@ -84,15 +96,70 @@ $app->post('/login', function (Request $request, Response $response, array $args
 
     }
 
-    // $myclass = new myclass();
-    // $response->getBody()->write( json_encode('test:'. $myclass->get_testvar() ) );
+    $response->getBody()->write( json_encode( $output ) );
+    return $response;
+
+});
+
+// POST USER: CREATE NEW USER
+$app->post('/user[/{id}]', function (Request $request, Response $response, array $args) {
+
+    // set default output
+    $output = [
+        'status' => '',
+        'message' => '', 
+        'data' =>  []
+    ];
+
+    // trim all post array variables
+    $create_data = array_map('trim',$request->getParsedBody());
+
+    // call up the validate object
+    $validate = new validate();
+
+    if ( $output = $validate->validate_create_user_data($create_data) ) {
+        // catch any errors before allowing to create a new user
+    } else {
+
+        // our data is validated
+        // including checking the uniqueness of the email and username
+
+        $validate->echo_data_title_die($create_data, 'validated new user info');
+
+        // try to create the user
+        try {
+
+            $user_create = R::dispense( 'users' );
+            $user_create->username = $create_data['username'];
+            $user_create->email = $create_data['email'];
+            $user_create->password = md5($create_data['password']);
+            $user_create->firstname = $create_data['firstname'];
+            $user_create->lastname = $create_data['lastname'];
+            $user_create->lastname = '1';
+            $user_create->created = date("Y-m-d H:i:s");
+            $user_create->updated = date("Y-m-d H:i:s");
+            R::store( $user_create );
+
+        } catch (Exception $e) {
+            $output['status'] = 'error';
+            $output['message'] = $e->getMessage();
+        }
+
+        // if no error messages
+        if ( $output['status'] != 'error' ) {
+            $output['status'] = 'success';
+            $output['data'] = 'new account created. you may now log in.';
+        }
+
+    }
 
     $response->getBody()->write( json_encode( $output ) );
     return $response;
 
 });
 
-$app->get('/user[/{id}]', function (Request $request, Response $response, array $args) {
+// PUT USER: UPDATE EXISTING USER
+$app->get('/user', function (Request $request, Response $response, array $args) {
 
     // set default output
     $output = [
@@ -109,10 +176,10 @@ $app->get('/user[/{id}]', function (Request $request, Response $response, array 
     } else {
 
         $user_id = (int)$args['id'];
-        $tokenAuth = isset($request->getHeader('token')[0]) ? $request->getHeader('token')[0] : '';
+        $tokenAuth = $GLOBALS['token'];
 
         $user = R::getRow(
-            "select id, username, token, token_expire, firstname, lastname, email, created, updated 
+            "select id, username, firstname, lastname, email, created, updated 
             from users where (id = :id) AND (status = 1) AND (token = :token) ", 
             array(':id' => $user_id, ':token' => $tokenAuth ) 
         );
@@ -132,41 +199,6 @@ $app->get('/user[/{id}]', function (Request $request, Response $response, array 
 
 })->add($auth_user_middleware);
 
-// $app->post('/user[/{id}]', function (Request $request, Response $response, array $args) {
-
-//     // set default output
-//     $output = [
-//         'status' => '',
-//         'message' => '', 
-//         'data' =>  []
-//     ];
-
-//     $post_data = $request->getParsedBody();
-
-//     echo "<pre>";
-//     print_r($post_data);
-//     echo "</pre>";
-
-//     try {
-//         $user = R::dispense( 'users' );
-//         $user->username = 'dudesmith';
-//         $user->email = 'dude@gmail.com';
-//         $user->password = 'temppass';
-//         $user->firstname = 'dude';
-//         $user->lastname = 'smith';
-//         $user->created = date("Y-m-d H:i:s");
-//         $user->updated = date("Y-m-d H:i:s");
-//         $id = R::store( $user );
-//     } catch (Exception $e) {
-//         echo 'Caught exception: ',  $e->getMessage(), "\n";
-//     }
-
-
-//     echo "post";
-//     die();
-// })->add($auth_user_middleware);
-
-
 $app->put('/user[/{id}]', function (Request $request, Response $response, array $args) {
 
     // set default output
@@ -176,114 +208,39 @@ $app->put('/user[/{id}]', function (Request $request, Response $response, array 
         'data' =>  []
     ];
 
-    if ( !(int)$args['id'] ) {
+    // trim all put array variables and add "id" from URL into the array
+    $update_data = array_merge( array_map('trim',$request->getParsedBody()), [ 'id' => (int)$args['id'] ] );
 
-        $output['status'] = 'error';
-        $output['message'] = 'valid user id required';
+    // call up the validate object
+    $validate = new validate();
 
+    if ( $output = $validate->validate_update_user_data($update_data) ) {
+        # catch any errors before allowing to update user data
     } else {
 
-        $user_id = (int)$args['id'];
-        $tokenAuth = isset($request->getHeader('token')[0]) ? $request->getHeader('token')[0] : '';
+        // try to update the user
+        try {
+            $user_update = R::load( 'users', $update_data[id] ); //reloads our book
+            $user_update->username = $update_data['username'];
+            $user_update->email = $update_data['email'];
+            $user_update->password = md5($update_data['password']);
+            $user_update->firstname = $update_data['firstname'];
+            $user_update->lastname = $update_data['lastname'];
+            $user_update->updated = date("Y-m-d H:i:s");
+            R::store( $user_update );
 
-        $user = R::getRow(
-            "select id, username, token, token_expire, firstname, lastname, email, created, updated 
-            from users where (id = :id) AND (status = 1) AND (token = :token) ", 
-            array(':id' => $user_id, ':token' => $tokenAuth ) 
-        );
-
-        if ( !count($user) ) {
+        } catch (Exception $e) {
             $output['status'] = 'error';
-            $output['message'] = 'you do not have permissions to update this user';
-        } else {
-            // $output['status'] = 'success';
-            // $output['data'] = $user;
+            $output['message'] = $e->getMessage();
+        }
 
-            $put_data = $request->getParsedBody();
-
-            // make sure we have all the fields
-            if ( 
-                !$put_data['username'] || !$put_data['email'] || 
-                !$put_data['firstname'] || !$put_data['lastname'] || 
-                !$put_data['password'] 
-            ) {
-                $output['status'] = 'error';
-                $output['message'] = 'missing required fields';
-            
-            // make sure the email is valid
-            } elseif (!filter_var($put_data['email'], FILTER_VALIDATE_EMAIL)) {
-                $output['status'] = 'error';
-                $output['message'] = 'email is invalid';
-            
-            // make sure username is alphanumeric
-            } elseif (preg_match('/[^a-z0-9]/i', $put_data['username'])) {
-                $output['status'] = 'error';
-                $output['message'] = 'username must be alphanumeric';
-
-            } else {
-
-                $username_in_use = R::getRow(
-                    "select id, username 
-                    from users where (id <> :id) AND (status = 1) AND (username = :username) ", 
-                    array(':id' => $user_id, ':username' => $put_data['username'] ) 
-                );
-
-                $email_in_use = R::getRow(
-                    "select id, email 
-                    from users where (id <> :id) AND (status = 1) AND (email = :email) ", 
-                    array(':id' => $user_id, ':email' => $put_data['email'] ) 
-                );
-
-                // test if username is in use by another user
-                if ( count($username_in_use) > 0 ) {
-                    $output['status'] = 'error';
-                    $output['message'] = 'username already in use by another user';
-
-                // test if email is in use by another user
-                } elseif ( count($email_in_use) > 0 ) {
-                    $output['status'] = 'error';
-                    $output['message'] = 'email already in use by another user';
-
-                } else {
-
-                    echo "<pre>";
-                    print_r($put_data);
-                    echo "</pre>";
-
-                    // try to update the user
-                    try {
-                        $user_update = R::load( 'users', $user_id ); //reloads our book
-                        $user_update->username = $put_data['username'];
-                        $user_update->email = $put_data['email'];
-                        $user_update->password = $put_data['password'];
-                        $user_update->firstname = $put_data['firstname'];
-                        $user_update->lastname = $put_data['lastname'];
-                        $user_update->updated = date("Y-m-d H:i:s");
-                        R::store( $user_update );
-
-                    } catch (Exception $e) {
-                        $output['status'] = 'error';
-                        $output['message'] = $e->getMessage();
-                    }
-
-                    // if no error messages
-                    if ( !$e->getMessage() ) {
-                        $output['status'] = 'success';
-                        $output['data'] = $user_update;
-
-                    }
-
-                }
-
-            }
-    
-        
-
-
-
+        // if no error messages
+        if ( $output['status'] != 'error' ) {
+            $output['status'] = 'success';
+            $output['data'] = $user_update;
 
         }
-    
+
     }
 
     $response->getBody()->write( json_encode( $output ) );
@@ -291,20 +248,46 @@ $app->put('/user[/{id}]', function (Request $request, Response $response, array 
 
 })->add($auth_user_middleware);
 
-// $app->delete('/user[/{id}]', function (Request $request, Response $response, array $args) {
+$app->delete('/user[/{id}]', function (Request $request, Response $response, array $args) {
 
-//     // set default output
-//     $output = [
-//         'status' => '',
-//         'message' => '', 
-//         'data' =>  []
-//     ];
+    // set default output
+    $output = [];
 
-//     $delete_data = $request->getParsedBody();
+    $delete_data = $request->getParsedBody();
 
-//     echo "<pre>";
-//     print_r($delete_data);
-//     echo "</pre>";
+    echo "<pre>";
+    print_r($delete_data);
+    echo "</pre>";
 
-//     echo "delete";
-// })->add($auth_user_middleware);
+    // call up the validate object
+    $validate = new validate();
+
+    if ( $output = $validate->validate_delete_user_data($delete_data) ) {
+        # catch any errors before allowing to update user data
+    } else {
+
+        // try to update the user
+        try {
+            $user_delete = R::load( 'users', $update_data[id] ); //reloads our book
+            $user_delete->status = 2;
+            $user_delete->token_expire = date('Y-m-d H:i:s', strtotime('-1 seconds'));
+            $user_delete->updated = date("Y-m-d H:i:s");
+            R::store( $user_delete );
+
+        } catch (Exception $e) {
+            $output['status'] = 'error';
+            $output['message'] = $e->getMessage();
+        }
+
+        // if no error messages
+        if ( $output['status'] != 'error' ) {
+            $output['status'] = 'success';
+            $output['data'] = 'account deleted.';
+        }
+
+    }
+
+    $response->getBody()->write( json_encode( $output ) );
+    return $response;
+
+})->add($auth_user_middleware);

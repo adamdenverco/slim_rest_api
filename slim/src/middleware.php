@@ -3,7 +3,7 @@
 // Application middleware
 $auth_user_middleware = function ($request, $response, $next) {
 
-    // get token from 
+    // get token from
     $tokenAuth = isset($request->getHeader('token')[0]) ? $request->getHeader('token')[0] : '';
     // $tokenAuth = "";
 
@@ -26,10 +26,6 @@ $auth_user_middleware = function ($request, $response, $next) {
             array(':token' => $tokenAuth, ':token_expire' => date('Y-m-d H:i:s') ) 
         );
 
-        // echo "<pre>";
-        // print_r($user);
-        // echo "</pre>";
-
         // if no user is found for the token, or the token is expired 
         // or the user is inactive, then deny access
         if ( count($user) == 0 ) { 
@@ -44,6 +40,9 @@ $auth_user_middleware = function ($request, $response, $next) {
     
         // else we found an active user with a non-expired token
         } else {
+
+            // update global token variable
+            $GLOBALS['token'] = $tokenAuth;
 
             // update the expiration date for the token so it persists
             $update_user = R::load('users', $user['id']);

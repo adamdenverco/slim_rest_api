@@ -9,6 +9,10 @@
             "name": "Josh Lockhart",
             "email": "info@joshlockhart.com",
             "homepage": "http://www.joshlockhart.com/"
+        },
+        {
+            "name": "Adam Wright",
+            "email": "adamdenverco@gmail.com"
         }
     ],
     "require": {

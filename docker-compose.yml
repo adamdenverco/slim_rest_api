@@ -36,7 +36,8 @@ mysql:
 data:
   image: mysql:latest
   volumes:
-    - /var/lib/mysql 
+    - /var/lib/mysql
+    - ./init.sql:/docker-entrypoint-initdb.d/init.sql
   command: "true"
 
 phpmyadmin:

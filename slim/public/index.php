@@ -1,4 +1,5 @@
 <?php
+
 if (PHP_SAPI == 'cli-server') {
     // To help the built-in PHP dev server, check if the request was actually for
     // something which should probably be served as a static file
@@ -41,10 +42,12 @@ R::setup(
 
 /*
  * ---------------------------------------------------------------
- * CUSTOM CLASS
+ * CUSTOM VALIDATE CLASS
  * ---------------------------------------------------------------
  */
-require __DIR__ . '/../src/myclass.php';
+require __DIR__ . '/../src/validate.php';
+// $validate = new validate();
+
 
 /*
  * ---------------------------------------------------------------
